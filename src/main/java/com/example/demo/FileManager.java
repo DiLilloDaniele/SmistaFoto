@@ -84,7 +84,7 @@ public class FileManager {
             }
         });
 
-        return Arrays.stream(files).sorted(FileManager.compareFiles()).map(i -> i.getName()).collect(Collectors.toList());
+        return Arrays.stream(files).map(i -> i.getName()).collect(Collectors.toList());
     }
 
     public static boolean checkFile(String path, String fileName) {
@@ -142,9 +142,16 @@ public class FileManager {
     public static void deleteFile() {
         if(lastPhotoMoved.isPresent()) {
             lastPhotoMoved.get().getKey().forEach(i -> {
+                System.out.println(i.getParent());
                 File toDelete = new File(i.toString());
                 if(toDelete.delete()) {
                     System.out.println("ELIMINATO");
+                    //check folder vuota
+                    File dir = new File(i.getParent().toString());
+                    if(Objects.requireNonNull(dir.listFiles()).length == 0) {
+                        System.out.println("DIRECTORY VUOTA");
+                        dir.delete();
+                    }
                     lastPhotoMoved = Optional.empty();
                 } else {
                     System.out.println("ERRORE");

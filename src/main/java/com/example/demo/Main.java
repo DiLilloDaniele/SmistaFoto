@@ -5,9 +5,11 @@ import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.exif.ExifIFD0Directory;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.css.CssMetaData;
 import javafx.event.ActionEvent;
@@ -31,10 +33,19 @@ import javafx.stage.Stage;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.prefs.Preferences;
 
@@ -73,6 +84,9 @@ public class Main extends Application implements Initializable {
 
     private Stage stage;
 
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    CompletableFuture<Boolean> future;
+
     private DirectoryChooser directoryChooser = new DirectoryChooser();
 
     private Optional<String> sourceAddress = Optional.empty();
@@ -101,7 +115,23 @@ public class Main extends Application implements Initializable {
     @Override
     public void start(Stage stage) throws Exception {
 
-        Thread.setDefaultUncaughtExceptionHandler( new Thread.UncaughtExceptionHandler(){
+        //check program validity
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://raw.githubusercontent.com/DiLilloDaniele/SmistaFoto/master/settings.json"))
+                .build();
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(HttpResponse::body)
+                .thenAccept(i -> {
+                    if(i.contains("true")) {
+                        System.out.println("PROGRAMMA ATTIVO");
+                    } else {
+                        System.exit(1);
+                    }
+                })
+                .join();
+
+        /*Thread.setDefaultUncaughtExceptionHandler( new Thread.UncaughtExceptionHandler(){
             public void uncaughtException(Thread t, Throwable e) {
                 System.out.println("*****Yeah, Caught the Exception*****");
                 //e.printStackTrace(); // you can use e.printStackTrace ( printstream ps )
@@ -112,7 +142,7 @@ public class Main extends Application implements Initializable {
                     throw new RuntimeException(ex);
                 }
             }
-        });
+        });*/
 
         this.stage = stage;
         //FXMLLoader.load(ClassLoader.getSystemResource("layouts/main.fxml"));
@@ -127,14 +157,20 @@ public class Main extends Application implements Initializable {
     @FXML
     private void order() {
         if(sourceAddress.isPresent()) {
-            List<String> newList = obsList.stream().map( i -> new File(sourceAddress.get() + File.separator + i)).sorted(FileManager.compareFiles()).map(i -> i.getName()).collect(Collectors.toList());
+            List<String> newList = obsList.stream().sorted(String::compareTo).collect(Collectors.toList());
             resetList(newList);
         }
     }
 
     @FXML
+    private void checkExistent() {
+        if(sourceAddress.isPresent() && destinationAddress.isPresent()) {
+            setPhotoList();
+        }
+    }
+
+    @FXML
     private void Undo() {
-        int i = 2/0;
         FileManager.lastPhotoMoved.ifPresent(path -> {
             obsList.add(0, path.getValue());
             FileManager.deleteFile();
@@ -206,6 +242,7 @@ public class Main extends Application implements Initializable {
                 //imposto immagine successiva selezionata
                 obsList.remove(index);
                 numFoto.setText(obsList.size() + " Foto");
+
                 if(index == obsList.size()) {
                     index = index - 1;
                 }
@@ -234,11 +271,38 @@ public class Main extends Application implements Initializable {
         if(sourceAddress.isPresent()) {
             resetList();
             List<String> list = FileManager.getListOfImages(sourceAddress.get(), destinationAddress, checkOnlyJpg.isSelected(), checkExist.isSelected(), obsList);
-            numFoto.setText(list.size() + " Foto");
-            System.out.println("AGGIORNO LISTA");
+            int count = list.size();
+            numFoto.setText(count + " Foto");
+            setListOfFiles();
+            /*
+            future = new CompletableFuture();
+            //fintanto che non finisce di importare non si può scegliere la destinazione
+            executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    System.out.println(" ZIOBOOOO");
+                    List<String> list = FileManager.getListOfImages(sourceAddress.get(), destinationAddress, checkOnlyJpg.isSelected(), checkExist.isSelected(), obsList);
+                    //obsList = FXCollections.observableArrayList(list);
+                    int count = list.size();
+                    System.out.println(" FATTO");
+                    future.complete(true);
+                }
+            });
 
-            setListOfFiles(list);
+            future.thenRunAsync(() -> {
+                System.out.println("END IMPORT");
+                Platform.runLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        System.out.println("AGGIORNO LISTA");
+                        numFoto.setText(obsList.size() + " Foto");
 
+                        if(!obsList.isEmpty())
+                            setImage(obsList.get(0));
+                    }
+                });
+            });
+            */
             dragdrop.setVisible(false);
             imagePreview.setVisible(true);
         }
@@ -264,7 +328,7 @@ public class Main extends Application implements Initializable {
         setPhotoList();
     }
 
-    private void setListOfFiles(List<String> list) {
+    private void setListOfFiles() {
         if(!obsList.isEmpty())
             setImage(obsList.get(0));
     }
@@ -273,7 +337,7 @@ public class Main extends Application implements Initializable {
     private void infoProgram() {
         createAlert("Selezionare prima di tutto la cartella sorgente (con le foto da smistare) e la cartella destinazione.\n" +
                 "Le foto JPEG presenti nella cartella sorgente verranno mostrate nella lista a lato. Selezionandole sarà" +
-                "possibile smistarle scrivendo il nome della cartella che si vuole creare, nell'apposita casella di testo.\n");
+                "possibile smistarle scrivendo il nome della cartella che si vuole creare, nell'apposita casella di testo.\n Version: 3.04.23");
     }
 
     @FXML
@@ -316,13 +380,6 @@ public class Main extends Application implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
 
-        filesListView.setOnMouseClicked(new EventHandler<MouseEvent>() {
-            @Override
-            public void handle(MouseEvent event) {
-                //TODO da rimuovere safe
-            }
-        });
-
         filesListView.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
@@ -338,10 +395,17 @@ public class Main extends Application implements Initializable {
             }
         });
 
+        checkExist.selectedProperty().addListener(new ChangeListener<Boolean>() {
+            @Override
+            public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
+                numberTextField.requestFocus();
+            }
+        });
+
         checkOnlyJpg.selectedProperty().addListener(new ChangeListener<Boolean>() {
             @Override
             public void changed(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-
+                numberTextField.requestFocus();
             }
         });
 
@@ -398,7 +462,7 @@ public class Main extends Application implements Initializable {
                     }
 
                     numFoto.setText(files.size() + " Foto");
-                    setListOfFiles(files);
+                    setListOfFiles();
                     success = true;
                     dragdrop.setVisible(false);
                     imagePreview.setVisible(true);

@@ -31,7 +31,7 @@
                   <HBox alignment="CENTER" maxHeight="60.0" prefHeight="60.0" prefWidth="200.0">
                      <children>
                          <CheckBox fx:id="checkOnlyJpg" mnemonicParsing="false" selected="true" text="Solo Jpeg" />
-                        <CheckBox fx:id="checkExist" mnemonicParsing="false" selected="false" text="Controllo esistenti">
+                        <CheckBox fx:id="checkExist" mnemonicParsing="false" onAction="#checkExistent" selected="false" text="Controllo esistenti">
                            <HBox.margin>
                               <Insets left="20.0" />
                            </HBox.margin>
@@ -46,7 +46,7 @@
                         <Font size="16.0" />
                      </font>
                   </Button>
-                  <Label fx:id="lblSource" text="Seleziona cartella">
+                  <Label fx:id="lblSource" maxHeight="100.0" maxWidth="300.0" prefHeight="84.0" prefWidth="300.0" text="Seleziona cartella" wrapText="true">
                      <VBox.margin>
                         <Insets bottom="5.0" />
                      </VBox.margin>
@@ -61,7 +61,7 @@
                      <font>
                         <Font size="16.0" />
                      </font></Button>
-                  <Label fx:id="lblDestination" text="Seleziona cartella">
+                  <Label fx:id="lblDestination" maxHeight="100.0" maxWidth="300.0" prefHeight="96.0" prefWidth="300.0" text="Seleziona cartella" wrapText="true">
                      <VBox.margin>
                         <Insets bottom="10.0" />
                      </VBox.margin>
